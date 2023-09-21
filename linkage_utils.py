@@ -82,6 +82,7 @@ def get_oriented_both(curve):
     else:
         d = d * np.sign(d[1])
         theta = -np.arctan(d[1]/d[0])
+    
 
     rot = np.array([[np.cos(theta),-np.sin(theta)],[np.sin(theta),np.cos(theta)]])
     out = np.matmul(rot,curve.T).T
@@ -91,6 +92,51 @@ def get_oriented_both(curve):
     out2 = np.matmul(rot2,curve.T).T
     out2 = out2 - np.min(out2,0)
 
+    return out, out2
+
+def batch_get_oriented_both(curve_batch):
+    """ Orient a batch of curves using PyTorch without torch.cat.
+    Parameters
+    ----------
+    curve_batch:  torch.Tensor [batch_size, n_points, 2]
+                  The batch of curves to be oriented.
+    Returns
+    -------
+    out:          torch.Tensor [batch_size, n_points, 2]
+                  The oriented curves.
+    """
+    
+    batch_size, n_points, _ = curve_batch.shape
+    
+    # Compute pairwise distances for each curve in the batch
+    ds = torch.cdist(curve_batch, curve_batch)
+    
+    # Find the pair of points with the maximum distance for each curve
+    _, indices = torch.max(ds.view(batch_size, -1), 1)
+    pi, t = indices // n_points, indices % n_points
+    
+    d = curve_batch[torch.arange(batch_size), pi] - curve_batch[torch.arange(batch_size), t]
+    
+    theta = -torch.atan2(d[:, 1], d[:, 0])
+    
+    # Construct the rotation matrices for each curve in the batch
+    rot = torch.zeros(batch_size, 2, 2, device=curve_batch.device)
+    rot[:, 0, 0] = torch.cos(theta)
+    rot[:, 0, 1] = -torch.sin(theta)
+    rot[:, 1, 0] = torch.sin(theta)
+    rot[:, 1, 1] = torch.cos(theta)
+    
+    out = torch.bmm(rot, curve_batch.permute(0, 2, 1)).permute(0, 2, 1)
+    out = out - torch.min(out, 1, keepdim=True)[0]
+    
+    rot[:, 0, 0] = torch.cos(theta + np.pi)
+    rot[:, 0, 1] = -torch.sin(theta + np.pi)
+    rot[:, 1, 0] = torch.sin(theta + np.pi)
+    rot[:, 1, 1] = torch.cos(theta + np.pi)
+    
+    out2 = torch.bmm(rot, curve_batch.permute(0, 2, 1)).permute(0, 2, 1)
+    out2 = out2 - torch.min(out2, 1, keepdim=True)[0]
+    
     return out, out2
 
 def get_oriented_angle(curve):
@@ -293,6 +339,27 @@ def get_mat(x0, C):
                 G[i,j] = G[j,i] = 0
     total = torch.sum(G)
     return total
+
+def batch_get_mat(x0, C):
+    """Get total link length of mechanism
+    Parameters
+    ----------
+    x0:    torch tensor [B, N,2]
+        The initial positions of the
+    C:     torch tensor [B, N,N]
+              Adjacency/Conncetivity matrix describing the structure of the palanar linkage mechanism.
+
+    Returns
+    -------
+    total:     float
+              total length of all links in mechanism.
+    """
+
+    # Calculate pairwise L2 norm for each batch entry
+    diff = x0.unsqueeze(2) - x0.unsqueeze(1)
+    l2_norm_batch = torch.norm(diff, dim=-1)
+    # El-wise mul with adjacency mat
+    return (C*l2_norm_batch).sum(dim=(1,2))
 
 def sort_mech(A, x0, motor,fixed_nodes):
     if motor[1] in fixed_nodes:
