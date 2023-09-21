@@ -1,2 +1,4 @@
 wandb/
 unsolved/
+*.pyc
+**/__pycache__/

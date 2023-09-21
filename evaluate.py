@@ -1,3 +1,3 @@
-from linkage_utils import *
+from linkages.linkage_utils import *
 
 evaluate_submission()

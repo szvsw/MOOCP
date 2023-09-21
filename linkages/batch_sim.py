@@ -1,8 +1,7 @@
 import torch
 import numpy as np
-import wandb
 
-from linkage_utils import (
+from linkages.linkage_utils import (
     sort_mech,
     batch_random_generator,
     batch_get_mat,
@@ -16,6 +15,7 @@ def batch_generate_mechs(config):
     NODE_COUNT = config["NODE_COUNT"]
     TIMESTEPS = config["TIMESTEPS"]
     SPATIAL_DIMS = config["SPATIAL_DIMS"]
+    SOLVE = config["SOLVE"]
 
     mechanisms = batch_random_generator(
         BATCH_SIZE,
@@ -35,6 +35,8 @@ def batch_generate_mechs(config):
             }
             for mechanism in mechanisms
         ]
+        if not SOLVE:
+            return mechanisms_dict
 
         # Sort the mechanisms
         mechanism_sorted = [
